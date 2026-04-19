@@ -219,15 +219,23 @@ function InfoSection({ setSideOpen }) {
 
 function CRUDSection({ title, setSideOpen, fields, fetchFn, saveFn, deleteFn, emptyForm, displayRow }) {
   const [items, setItems]   = useState([])
-  const [form, setForm]     = useState(emptyForm)
+  const [form, setForm]     = useState({...emptyForm})
   const [mode, setMode]     = useState('list')
   const [saving, setSaving] = useState(false)
-  const load = () => fetchFn().then(setItems).catch(()=>{})
+  const load = () => fetchFn().then(setItems).catch((e)=>{ console.error('Load error:',e) })
   useEffect(()=>{ load() },[])
   const save = async(e)=>{
     e.preventDefault(); setSaving(true)
-    try { await saveFn(form); toast.success('Data disimpan!'); setMode('list'); load() }
-    catch { toast.error('Gagal menyimpan') }
+    try {
+      await saveFn(form)
+      toast.success('Data disimpan!')
+      setMode('list')
+      setForm({...emptyForm})
+      load()
+    } catch(e) {
+      console.error('Save error:',e)
+      toast.error('Gagal menyimpan: ' + (e.message||''))
+    }
     setSaving(false)
   }
   const del = async(id)=>{ if(!confirm('Yakin hapus?')) return; await deleteFn(id); toast.success('Dihapus'); load() }
@@ -318,8 +326,9 @@ const LaporanSection = ({setSideOpen}) => <CRUDSection title="Laporan Infaq" set
 
 function KeuanganSection({ setSideOpen, type }) {
   const isMasuk = type==='pemasukan'
+  const koleksi = isMasuk ? 'pemasukan' : 'pengeluaran'
   const [items, setItems]       = useState([])
-  const [form, setForm]         = useState({keterangan:'',jumlah:0,tanggal:new Date().toISOString().split('T')[0],kategori:''})
+  const [form, setForm]         = useState({keterangan:'',jumlah:0,tanggal:new Date().toISOString().split('T')[0],kategori:'',tipe:koleksi})
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving]     = useState(false)
   const [bulan, setBulan]       = useState(new Date().getMonth()+1)
@@ -327,11 +336,17 @@ function KeuanganSection({ setSideOpen, type }) {
   const fetchFn = isMasuk ? getPemasukan : getPengeluaran
   const addFn   = isMasuk ? addPemasukan : addPengeluaran
   const delFn   = isMasuk ? deletePemasukan : deletePengeluaran
-  const load = () => fetchFn(bulan,tahun).then(setItems).catch(()=>{})
-  useEffect(()=>{ load() },[bulan,tahun])
+  // Reset state saat type berubah
+  useEffect(()=>{
+    setItems([])
+    setForm({keterangan:'',jumlah:0,tanggal:new Date().toISOString().split('T')[0],kategori:'',tipe:koleksi})
+    setShowForm(false)
+  },[type])
+  const load = () => fetchFn(bulan,tahun).then(setItems).catch((e)=>console.error('Keuangan load error:',e))
+  useEffect(()=>{ load() },[bulan,tahun,type])
   const save = async(e)=>{
     e.preventDefault(); setSaving(true)
-    try { await addFn({...form,jumlah:Number(form.jumlah)}); toast.success('Disimpan!'); setShowForm(false); load(); setForm({keterangan:'',jumlah:0,tanggal:new Date().toISOString().split('T')[0],kategori:''}) }
+    try { const {tipe,...data}=form; await addFn({...data,jumlah:Number(data.jumlah)}); toast.success('Disimpan!'); setShowForm(false); load(); setForm({keterangan:'',jumlah:0,tanggal:new Date().toISOString().split('T')[0],kategori:'',tipe:koleksi}) }
     catch { toast.error('Gagal menyimpan') }
     setSaving(false)
   }
